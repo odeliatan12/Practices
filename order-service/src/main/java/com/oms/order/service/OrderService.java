@@ -154,9 +154,9 @@ public class OrderService {
 
     @Transactional
     public Order cancelOrder(UUID orderId, UUID customerId) {
-        // read through multi-tier cache — avoids DB hit if order is cached
         Order order = orderCacheManager.getOrder(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+        String auditNote = order.getNotes().trim();
 
         if (!order.getCustomerId().equals(customerId)) {
             throw new OrderAccessDeniedException(orderId);

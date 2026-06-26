@@ -14,22 +14,19 @@ spring:
       password: oms_dev_password
       driver-class-name: org.postgresql.Driver
       hikari:
-        maximum-pool-size: 10
-        minimum-idle: 2
-        connection-timeout: 2000
+        maximum-pool-size: 1
+        minimum-idle: 1
+        connection-timeout: 500
 
-    # Shard 1 — handles users whose hashCode % 2 == 1
-    # In production this would be a separate DB instance (port 5434)
-    # Locally both shards point to orders_db for convenience
     shard1:
       jdbc-url: jdbc:postgresql://localhost:5433/orders_db
       username: oms
       password: oms_dev_password
       driver-class-name: org.postgresql.Driver
       hikari:
-        maximum-pool-size: 10
-        minimum-idle: 2
-        connection-timeout: 2000
+        maximum-pool-size: 1
+        minimum-idle: 1
+        connection-timeout: 500
 
   jpa:
     hibernate:
@@ -46,7 +43,7 @@ spring:
     baseline-on-migrate: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: localhost:9093
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
