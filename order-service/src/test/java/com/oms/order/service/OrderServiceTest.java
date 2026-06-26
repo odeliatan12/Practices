@@ -105,8 +105,9 @@ class OrderServiceTest {
                 .id(UUID.randomUUID())
                 .customerId(customerId)
                 .status(status)
-                .lineItems(new ArrayList<>())   // empty list avoids NPE in buildInvoiceContent()
+                .lineItems(new ArrayList<>())
                 .totalAmount(BigDecimal.TEN)
+                .notes("test order")
                 .build();
     }
 
