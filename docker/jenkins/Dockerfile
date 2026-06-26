@@ -24,5 +24,15 @@ RUN curl -fsSL https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/bi
     | tar -xz -C /opt \
     && ln -s /opt/apache-maven-${MAVEN_VERSION}/bin/mvn /usr/local/bin/mvn
 
+# Pre-install required Jenkins plugins so they are baked into the image.
+# Without this, plugins survive only in the jenkins_home volume — a fresh
+# container rebuild would lose them and the pipeline would fail again.
+RUN jenkins-plugin-cli --plugins \
+    docker-workflow \
+    git \
+    workflow-aggregator \
+    pipeline-stage-view \
+    junit
+
 # Stay as root so Jenkins can access the Docker socket mounted from the host
 # In a stricter setup you would add jenkins to the docker group instead
