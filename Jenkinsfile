@@ -151,22 +151,31 @@ pipeline {
                     sh """
                         chmod 600 \${SSH_KEY}
 
-                        # Copy production compose file to the server
+                        # Build docker auth config on Jenkins side — avoids macOS Keychain
+                        # on the server which is inaccessible in SSH sessions
+                        DOCKER_AUTH=\$(printf '%s:%s' "\${REGISTRY_USER}" "\${REGISTRY_PASS}" | base64 | tr -d '\\n')
+                        printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' "\${DOCKER_AUTH}" > /tmp/jenkins-docker-auth.json
+
+                        # Copy compose file and auth config to the server
                         scp -i \${SSH_KEY} -o StrictHostKeyChecking=no \
                             docker-compose.prod.yml \${DEPLOY_USER}@\${DEPLOY_HOST}:/opt/oms/docker-compose.yml
+                        scp -i \${SSH_KEY} -o StrictHostKeyChecking=no \
+                            /tmp/jenkins-docker-auth.json \${DEPLOY_USER}@\${DEPLOY_HOST}:/tmp/jenkins-docker-auth.json
 
                         # Pull new images and restart app containers
                         ssh -i \${SSH_KEY} -o StrictHostKeyChecking=no \${DEPLOY_USER}@\${DEPLOY_HOST} "
                             export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
                             export DOCKER_HOST=unix:///Users/\${DEPLOY_USER}/.colima/default/docker.sock
-                            export DOCKER_CONFIG=/tmp/jenkins-docker-config
                             mkdir -p /tmp/jenkins-docker-config
-                            echo '{}' > /tmp/jenkins-docker-config/config.json
-                            echo '\${REGISTRY_PASS}' | docker login ghcr.io -u '\${REGISTRY_USER}' --password-stdin
+                            mv /tmp/jenkins-docker-auth.json /tmp/jenkins-docker-config/config.json
+                            export DOCKER_CONFIG=/tmp/jenkins-docker-config
                             docker pull ${ORDER_IMAGE}:${IMAGE_TAG}
                             docker pull ${GATEWAY_IMAGE}:${IMAGE_TAG}
                             cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway
+                            rm -rf /tmp/jenkins-docker-config
                         "
+
+                        rm -f /tmp/jenkins-docker-auth.json
                     """
                 }
             }
