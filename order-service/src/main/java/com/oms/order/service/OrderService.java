@@ -106,6 +106,8 @@ public class OrderService {
                 .notes(request.getNotes())
                 .build();
 
+        lineItems.forEach(li -> li.setOrder(order));
+
         Order saved = orderRepository.save(order);
 
         orderEventRepository.save(OrderEvent.builder()
