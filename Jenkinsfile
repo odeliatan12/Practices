@@ -138,7 +138,7 @@ pipeline {
         // This stage runs only on the main branch — not on feature branches or PRs.
         stage('Deploy') {
             when {
-                branch 'main'
+                expression { env.GIT_BRANCH ==~ /.*main/ }
             }
             steps {
                 withCredentials([
