@@ -159,6 +159,9 @@ pipeline {
                         ssh -i \${SSH_KEY} -o StrictHostKeyChecking=no \${DEPLOY_USER}@\${DEPLOY_HOST} "
                             export PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin
                             export DOCKER_HOST=unix:///Users/\${DEPLOY_USER}/.colima/default/docker.sock
+                            export DOCKER_CONFIG=/tmp/jenkins-docker-config
+                            mkdir -p /tmp/jenkins-docker-config
+                            echo '{}' > /tmp/jenkins-docker-config/config.json
                             echo '\${REGISTRY_PASS}' | docker login ghcr.io -u '\${REGISTRY_USER}' --password-stdin
                             docker pull ${ORDER_IMAGE}:${IMAGE_TAG}
                             docker pull ${GATEWAY_IMAGE}:${IMAGE_TAG}
