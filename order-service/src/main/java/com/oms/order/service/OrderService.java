@@ -266,19 +266,19 @@ public class OrderService {
 
     private String buildInvoiceContent(Order order, UUID paymentId) {
         try {
-            // represents the large document stored externally — only its ID goes into Kafka
-            return objectMapper.writeValueAsString(java.util.Map.of(
-                    "orderId", order.getId(),
-                    "customerId", order.getCustomerId(),
-                    "paymentId", paymentId,
-                    "totalAmount", order.getTotalAmount(),
-                    "currency", order.getCurrency(),
-                    "lineItems", order.getLineItems(),
-                    "shippingName", order.getShippingName(),
-                    "shippingLine1", order.getShippingLine1(),
-                    "shippingCity", order.getShippingCity(),
-                    "confirmedAt", java.time.Instant.now()
-            ));
+            // Map.of() rejects null values — shipping fields are optional so use HashMap
+            java.util.Map<String, Object> invoice = new java.util.LinkedHashMap<>();
+            invoice.put("orderId",      order.getId());
+            invoice.put("customerId",   order.getCustomerId());
+            invoice.put("paymentId",    paymentId);
+            invoice.put("totalAmount",  order.getTotalAmount());
+            invoice.put("currency",     order.getCurrency());
+            invoice.put("lineItems",    order.getLineItems());
+            invoice.put("shippingName", order.getShippingName());
+            invoice.put("shippingLine1",order.getShippingLine1());
+            invoice.put("shippingCity", order.getShippingCity());
+            invoice.put("confirmedAt",  java.time.Instant.now());
+            return objectMapper.writeValueAsString(invoice);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to build invoice for order " + order.getId(), e);
         }

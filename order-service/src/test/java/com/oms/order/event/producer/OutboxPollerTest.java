@@ -29,9 +29,10 @@ import com.oms.shared.event.OrderStatusChangedEvent;
 import com.oms.shared.event.InvoiceGeneratedEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.apache.kafka.clients.producer.ProducerRecord;
+
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -104,7 +105,7 @@ class OutboxPollerTest {
         OutboxEvent e3 = pendingEvent("InvoiceGenerated");
 
         when(outboxEventRepository.findUnpublishedForUpdate()).thenReturn(List.of(e1, e2, e3));
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(kafkaSuccess());
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenReturn(kafkaSuccess());
 
         // WHEN
         outboxPoller.poll();
@@ -147,10 +148,11 @@ class OutboxPollerTest {
 
         when(outboxEventRepository.findUnpublishedForUpdate()).thenReturn(List.of(e1, e2));
 
-        // Differentiate success/failure by the Kafka message key (aggregateId)
-        when(kafkaTemplate.send(anyString(), eq(e1.getAggregateId().toString()), any()))
+        // Differentiate success/failure by matching the ProducerRecord's message key (aggregateId).
+        // Null guard required: Mockito passes null to argThat during internal matching.
+        when(kafkaTemplate.send(argThat((ProducerRecord r) -> r != null && e1.getAggregateId().toString().equals(r.key()))))
                 .thenReturn(kafkaSuccess());
-        when(kafkaTemplate.send(anyString(), eq(e2.getAggregateId().toString()), any()))
+        when(kafkaTemplate.send(argThat((ProducerRecord r) -> r != null && e2.getAggregateId().toString().equals(r.key()))))
                 .thenReturn(kafkaFailure("NETWORK_EXCEPTION: Connection to broker 9092 timed out"));
 
         // WHEN
@@ -212,7 +214,7 @@ class OutboxPollerTest {
         // 5 threads race concurrently — the call order is non-deterministic,
         // but the total count is always exactly 10 (one per event).
         AtomicInteger callNumber = new AtomicInteger(0);
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenAnswer(inv -> {
+        when(kafkaTemplate.send(any(ProducerRecord.class))).thenAnswer(inv -> {
             int n = callNumber.incrementAndGet();
             return (n % 3 == 0)
                     ? kafkaFailure("Broker leader not available for partition")

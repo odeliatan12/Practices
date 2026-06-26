@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -27,6 +28,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.oms.order.domain.Order;
 import com.oms.order.domain.OrderStatus;
 import com.oms.order.domain.OutboxEvent;
@@ -51,17 +53,17 @@ class OrderServiceTest {
     @Mock private ValueOperations<String, Order> valueOperations;
     @Mock private OrderCacheManager orderCacheManager;
 
-    // Real ObjectMapper — Mockito cannot reliably stub writeValueAsString()
-    // because it's inherited across Jackson's class hierarchy
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    // Real ObjectMapper with JavaTimeModule — Spring Boot auto-registers this in production
+    // but a bare new ObjectMapper() does not have it, causing Instant serialization to fail
+    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     private OrderService orderService;
 
     @BeforeEach
     void setUp() {
-        // opsForValue() must return the mock before OrderService is built,
-        // because createOrder() calls redisTemplate.opsForValue().get() on every request
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        // lenient: only createOrder() uses redisTemplate — cancelOrder/handlePayment tests
+        // don't call it, so strict Mockito would throw UnnecessaryStubbingException
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         orderService = new OrderService(
                 orderRepository, orderEventRepository, outboxEventRepository,
