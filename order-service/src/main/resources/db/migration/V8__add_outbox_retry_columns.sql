@@ -1,0 +1,4 @@
+ALTER TABLE outbox_events
+    ADD COLUMN IF NOT EXISTS retry_count     INTEGER     NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS dead_lettered_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS correlation_id  VARCHAR(64);

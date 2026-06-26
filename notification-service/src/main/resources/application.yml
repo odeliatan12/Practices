@@ -1,0 +1,59 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: notification-service
+
+  # No database — this service only consumes Kafka and sends notifications
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: notification-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.oms.*"
+
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+
+  # Thymeleaf — email templates
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
+    cache: false    # disable cache in dev so template changes take effect immediately
+
+# Stub mode — logs notifications to console instead of calling SendGrid / Twilio
+notification:
+  mode: stub
+  email:
+    from: noreply@oms-dev.local
+  sendgrid:
+    api-key: ${SENDGRID_API_KEY:placeholder}
+  twilio:
+    account-sid: ${TWILIO_ACCOUNT_SID:placeholder}
+    auth-token: ${TWILIO_AUTH_TOKEN:placeholder}
+    from-number: ${TWILIO_FROM_NUMBER:+10000000000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.oms.notification: INFO
+    org.springframework.kafka: WARN

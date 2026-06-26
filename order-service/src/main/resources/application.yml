@@ -1,0 +1,87 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: order-service
+
+  datasource:
+    # Shard 0 — handles users whose hashCode % 2 == 0
+    # Same schema as shard1 — every shard is structurally identical, data is split by userId
+    shard0:
+      jdbc-url: jdbc:postgresql://localhost:5433/orders_db
+      username: oms
+      password: oms_dev_password
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 2000
+
+    # Shard 1 — handles users whose hashCode % 2 == 1
+    # In production this would be a separate DB instance (port 5434)
+    # Locally both shards point to orders_db for convenience
+    shard1:
+      jdbc-url: jdbc:postgresql://localhost:5433/orders_db
+      username: oms
+      password: oms_dev_password
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 2000
+
+  jpa:
+    hibernate:
+      ddl-auto: none            # Flyway manages the schema — Hibernate must not touch it
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: order-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.oms.*"
+
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+logging:
+  level:
+    com.oms.order: INFO
+    org.springframework.kafka: WARN

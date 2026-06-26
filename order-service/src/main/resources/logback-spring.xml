@@ -1,0 +1,64 @@
+<configuration>
+
+    <!--
+        logback-spring.xml is loaded by Spring Boot before the application context starts,
+        which allows <springProfile> and <springProperty> tags to work.
+        Prefer this over logback.xml for Spring Boot projects.
+    -->
+
+    <!-- Pull the app name from application.yml so it appears in every log line -->
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="order-service"/>
+
+    <!--
+        Console appender — writes to stdout.
+        In production (Kubernetes) stdout is collected by Fluentd/Filebeat and shipped to ELK.
+        No file appender needed when running in containers — the orchestrator handles log storage.
+    -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!--
+                Log pattern breakdown:
+                  %d{ISO8601}          → timestamp:      2024-06-12T10:23:45.123
+                  [${appName}]         → service name:   [order-service]
+                  %-5level             → log level:       INFO  (padded to 5 chars for alignment)
+                  %X{correlationId}    → MDC value:       abc-123  (blank if not set)
+                  %logger{36}          → class name:      c.o.o.service.OrderService (max 36 chars)
+                  %msg                 → the log message
+                  %n                   → newline
+
+                %X{correlationId} reads from MDC — CorrelationIdFilter sets it at the start
+                of every request and removes it at the end.
+                If the key is not in MDC (e.g. background threads), this prints nothing.
+            -->
+            <pattern>%d{ISO8601} [${appName}] %-5level [correlationId=%X{correlationId}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+        Root logger — applies to all classes unless overridden below.
+        INFO level means DEBUG logs are hidden in production (too noisy).
+    -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <!--
+        Service-specific loggers — show DEBUG for our own code only.
+        This means SQL queries, Spring internals, Kafka internals stay at INFO/WARN
+        while our own classes show full debug output.
+    -->
+    <logger name="com.oms.order" level="DEBUG" additivity="false">
+        <appender-ref ref="CONSOLE"/>
+    </logger>
+
+    <!--
+        Reduce noise from these frameworks in development.
+        Hibernate prints every SQL statement at DEBUG — too verbose for daily use.
+    -->
+    <logger name="org.hibernate.SQL"                        level="WARN"/>
+    <logger name="org.hibernate.orm.jdbc.bind"              level="WARN"/>
+    <logger name="org.springframework.kafka"                level="WARN"/>
+    <logger name="org.springframework.data.redis"           level="WARN"/>
+    <logger name="org.flywaydb"                             level="INFO"/>
+
+</configuration>

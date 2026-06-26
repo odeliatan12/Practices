@@ -1,0 +1,185 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # AuthFilter and RateLimitFilter are GlobalFilters — they run on every route.
+      # No need to list them per-route.
+      routes:
+
+        # ── Auth (public — no JWT required) ──────────────────────────────────
+        # No circuit breaker here: if auth-service is down, users cannot log in
+        # regardless — a fallback response would be misleading.
+        - id: auth-service
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/v1/auth/**
+          metadata:
+            connect-timeout: 1000   # ms to establish TCP connection to auth-service
+            response-timeout: 5000  # ms to wait for auth-service to respond
+
+        # ── Orders ───────────────────────────────────────────────────────────
+        - id: order-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/orders/**
+          filters:
+            # CircuitBreaker wraps this route.
+            # If order-service fails enough times, the circuit opens and all requests
+            # are instantly forwarded to /fallback/order instead of hitting the real service.
+            - name: CircuitBreaker
+              args:
+                name: orderCircuitBreaker
+                fallbackUri: forward:/fallback/order
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 5000
+
+        # ── Inventory ────────────────────────────────────────────────────────
+        # Shorter timeout: stock checks should be fast; if they're slow the DB is struggling.
+        - id: inventory-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/v1/inventory/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: inventoryCircuitBreaker
+                fallbackUri: forward:/fallback/inventory
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 3000  # tighter — inventory reads should be sub-second
+
+        # ── Payments ─────────────────────────────────────────────────────────
+        # Longer timeout: payment providers (Stripe, PayNow) can be slow.
+        # Fallback message explicitly says "do not retry" to avoid double charges.
+        - id: payment-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: paymentCircuitBreaker
+                fallbackUri: forward:/fallback/payment
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 10000  # payment providers can take up to 10s
+
+        # ── Fulfillment ───────────────────────────────────────────────────────
+        - id: fulfillment-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/v1/fulfillment/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: fulfillmentCircuitBreaker
+                fallbackUri: forward:/fallback/fulfillment
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 5000
+
+      # ── Global filters applied to every route ────────────────────────────────
+      default-filters:
+        # Reject any request whose body exceeds 5MB.
+        # Without this, a malicious client could upload a huge payload and exhaust
+        # the gateway's memory — especially dangerous during flash sales when traffic
+        # is already high. 5MB is generous for a REST API (order payloads are ~2KB).
+        - name: RequestSize
+          args:
+            maxSize: 5MB
+
+      # Global CORS — allow the frontend dev server
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: "http://localhost:5173"
+            allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+            allowed-headers: "*"
+            allow-credentials: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6380
+      timeout: 2000ms
+
+# JWT secret for HS256 (dev only).
+# In production replace with RS256 public key from user-service JWKS endpoint.
+# Must be at least 32 characters.
+jwt:
+  secret: "dev-secret-key-replace-in-production-min-32-chars"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+# ── Circuit Breaker thresholds (Resilience4j) ────────────────────────────────
+# These settings control when the circuit opens (trips) and when it recovers.
+# Applied to every named circuit breaker defined in the route filters above.
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Shared defaults — each named breaker inherits these unless overridden
+      orderCircuitBreaker:
+        # How many of the last N calls are tracked for the failure rate calculation
+        slidingWindowSize: 10
+        # Open the circuit if 50% or more of the last 10 calls failed
+        # e.g. 5 out of 10 failed → circuit opens
+        failureRateThreshold: 50
+        # How long (ms) to wait in OPEN state before allowing one probe request (HALF_OPEN)
+        waitDurationInOpenState: 10000
+        # How many calls are allowed through in HALF_OPEN state to test recovery
+        permittedNumberOfCallsInHalfOpenState: 3
+        # Do not count a call as slow unless it takes longer than this
+        # Prevents noise from occasional network blips
+        slowCallDurationThreshold: 5000
+        # If 80% of calls are slow (>5s), open the circuit even if they succeeded
+        # Slow responses cause thread exhaustion just like failures
+        slowCallRateThreshold: 80
+
+      inventoryCircuitBreaker:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallDurationThreshold: 3000  # matches the tighter 3s route timeout
+        slowCallRateThreshold: 80
+
+      paymentCircuitBreaker:
+        slidingWindowSize: 10
+        # Payment is more tolerant — only open if 70% fail (not 50%)
+        # Because payment providers have occasional slow responses that are normal
+        failureRateThreshold: 70
+        # Stay open longer — give payment provider time to recover
+        waitDurationInOpenState: 30000
+        permittedNumberOfCallsInHalfOpenState: 2
+        slowCallDurationThreshold: 10000  # matches the 10s route timeout
+        slowCallRateThreshold: 80
+
+      fulfillmentCircuitBreaker:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10000
+        permittedNumberOfCallsInHalfOpenState: 3
+        slowCallDurationThreshold: 5000
+        slowCallRateThreshold: 80
+
+logging:
+  level:
+    com.oms.gateway: DEBUG
+    org.springframework.cloud.gateway: WARN
+    # Log circuit breaker state transitions (CLOSED → OPEN → HALF_OPEN → CLOSED)
+    io.github.resilience4j: INFO
