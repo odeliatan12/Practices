@@ -1,0 +1,95 @@
+services:
+
+  order-service:
+    image: ghcr.io/odeliatan12/oms/order-service:${IMAGE_TAG:-latest}
+    container_name: oms-order-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_SHARD0_JDBC_URL: jdbc:postgresql://oms-postgres:5432/orders_db
+      SPRING_DATASOURCE_SHARD1_JDBC_URL: jdbc:postgresql://oms-postgres:5432/orders_db
+      SPRING_DATASOURCE_SHARD0_USERNAME: oms
+      SPRING_DATASOURCE_SHARD0_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_SHARD1_USERNAME: oms
+      SPRING_DATASOURCE_SHARD1_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    networks:
+      - oms-network
+
+  api-gateway:
+    image: ghcr.io/odeliatan12/oms/api-gateway:${IMAGE_TAG:-latest}
+    container_name: oms-api-gateway
+    restart: unless-stopped
+    ports:
+      - "80:8090"
+    environment:
+      ORDER_SERVICE_URL: http://oms-order-service:8080
+      SPRING_DATA_REDIS_HOST: oms-redis
+    depends_on:
+      - order-service
+    networks:
+      - oms-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: oms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orders_db
+      POSTGRES_USER: oms
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oms -d orders_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - oms-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: oms-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - oms-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: oms-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://oms-kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@oms-kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - oms-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  kafka_data:
+
+networks:
+  oms-network:
+    driver: bridge

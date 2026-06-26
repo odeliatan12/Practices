@@ -13,7 +13,8 @@
 //   registry-credentials  — Username/Password:
 //                             Username = your GitHub username
 //                             Password = GitHub PAT with write:packages scope
-//   kubeconfig            — Secret File containing your kubeconfig
+//   deploy-host           — Secret Text: IP or hostname of your production server
+//   deploy-ssh-key        — SSH Username with private key for the production server
 // ─────────────────────────────────────────────────────────────────────────────
 
 pipeline {
@@ -140,24 +141,25 @@ pipeline {
                 branch 'main'
             }
             steps {
-                // 'kubeconfig' is the ID of the Secret File credential containing
-                // your kubeconfig (downloaded from your cluster's admin panel).
-                // kubectl reads this file to know which cluster to deploy to.
-                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                withCredentials([
+                    string(credentialsId: 'deploy-host', variable: 'DEPLOY_HOST'),
+                    sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'DEPLOY_USER'),
+                    usernamePassword(credentialsId: 'registry-credentials', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS')
+                ]) {
                     sh """
-                        # Rolling update — Kubernetes pulls the new image tag from
-                        # the registry and replaces pods one at a time (zero downtime)
-                        kubectl set image deployment/order-service \
-                            order-service=${ORDER_IMAGE}:${IMAGE_TAG} \
-                            --record
+                        chmod 600 \${SSH_KEY}
 
-                        kubectl set image deployment/api-gateway \
-                            api-gateway=${GATEWAY_IMAGE}:${IMAGE_TAG} \
-                            --record
+                        # Copy production compose file to the server
+                        scp -i \${SSH_KEY} -o StrictHostKeyChecking=no \
+                            docker-compose.prod.yml \${DEPLOY_USER}@\${DEPLOY_HOST}:/opt/oms/docker-compose.yml
 
-                        # Wait until the rollout finishes before marking the build green
-                        kubectl rollout status deployment/order-service --timeout=120s
-                        kubectl rollout status deployment/api-gateway   --timeout=120s
+                        # Pull new images and restart app containers
+                        ssh -i \${SSH_KEY} -o StrictHostKeyChecking=no \${DEPLOY_USER}@\${DEPLOY_HOST} "
+                            echo '\${REGISTRY_PASS}' | docker login ghcr.io -u '\${REGISTRY_USER}' --password-stdin
+                            docker pull ${ORDER_IMAGE}:${IMAGE_TAG}
+                            docker pull ${GATEWAY_IMAGE}:${IMAGE_TAG}
+                            cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway
+                        "
                     """
                 }
             }
