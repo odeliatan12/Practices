@@ -6,11 +6,13 @@
 //   2. Test         — mvn test for shared-lib, order-service, api-gateway
 //   3. Build JARs   — mvn package (skip tests, already done)
 //   4. Build Images — docker build for order-service and api-gateway
-//   5. Push Images  — docker push to registry (Nexus / JFrog / local)
+//   5. Push Images  — docker push to GitHub Container Registry (ghcr.io)
 //   6. Deploy       — kubectl rolling update on the target cluster
 //
 // Required Jenkins credentials (add in Manage Jenkins → Credentials):
-//   registry-credentials  — Username/Password for your Docker registry
+//   registry-credentials  — Username/Password:
+//                             Username = your GitHub username
+//                             Password = GitHub PAT with write:packages scope
 //   kubeconfig            — Secret File containing your kubeconfig
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -20,9 +22,9 @@ pipeline {
 
     // ── Environment variables ─────────────────────────────────────────────────
     environment {
-        // Change REGISTRY to your Nexus/JFrog URL, e.g. nexus.company.com/oms
-        // For local testing with the registry container: localhost:5001/oms
-        REGISTRY       = 'localhost:5001/oms'
+        // GitHub Container Registry — images are public by default (change visibility
+        // in GitHub → Packages → package settings if you want them private).
+        REGISTRY       = 'ghcr.io/odeliatan12/oms'
 
         // Image names
         ORDER_IMAGE    = "${REGISTRY}/order-service"
@@ -119,7 +121,7 @@ pipeline {
                     passwordVariable: 'REGISTRY_PASS'
                 )]) {
                     sh """
-                        echo "${REGISTRY_PASS}" | docker login ${REGISTRY} -u ${REGISTRY_USER} --password-stdin
+                        echo "${REGISTRY_PASS}" | docker login ghcr.io -u ${REGISTRY_USER} --password-stdin
 
                         docker push ${ORDER_IMAGE}:${IMAGE_TAG}
                         docker push ${ORDER_IMAGE}:latest
