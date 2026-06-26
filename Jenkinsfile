@@ -14,7 +14,8 @@
 //                             Username = your GitHub username
 //                             Password = GitHub PAT with write:packages scope
 //   deploy-host           — Secret Text: IP or hostname of your production server
-//   deploy-ssh-key        — SSH Username with private key for the production server
+//   deploy-user           — Secret Text: SSH username for the production server
+//   deploy-ssh-key        — Secret File: private key file for the production server
 // ─────────────────────────────────────────────────────────────────────────────
 
 pipeline {
@@ -143,7 +144,8 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: 'deploy-host', variable: 'DEPLOY_HOST'),
-                    sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'DEPLOY_USER'),
+                    string(credentialsId: 'deploy-user', variable: 'DEPLOY_USER'),
+                    file(credentialsId: 'deploy-ssh-key', variable: 'SSH_KEY'),
                     usernamePassword(credentialsId: 'registry-credentials', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS')
                 ]) {
                     sh """
