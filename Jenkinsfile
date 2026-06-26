@@ -134,42 +134,31 @@ pipeline {
         }
 
         // ── 6. Deploy ─────────────────────────────────────────────────────────
-        // Runs only on the main branch.
-        // Requires a 'kubeconfig' Secret File credential in Jenkins.
-        // Skip this stage until Kubernetes is configured.
+        // This stage runs only on the main branch — not on feature branches or PRs.
         stage('Deploy') {
             when {
-                // GIT_BRANCH is set by the Git plugin on both plain Pipeline and
-                // Multibranch Pipeline jobs. It is typically "origin/main" when
-                // Jenkins clones from a remote, so we match the suffix.
-                expression { env.GIT_BRANCH ==~ /.*main/ }
+                branch 'main'
             }
             steps {
-                script {
-                    // Check whether kubeconfig credential exists before attempting deploy.
-                    // Remove this guard once Kubernetes is configured.
-                    def hasKubeconfig = false
-                    try {
-                        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                            hasKubeconfig = true
-                            sh """
-                                kubectl set image deployment/order-service \
-                                    order-service=${ORDER_IMAGE}:${IMAGE_TAG}
+                // 'kubeconfig' is the ID of the Secret File credential containing
+                // your kubeconfig (downloaded from your cluster's admin panel).
+                // kubectl reads this file to know which cluster to deploy to.
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh """
+                        # Rolling update — Kubernetes pulls the new image tag from
+                        # the registry and replaces pods one at a time (zero downtime)
+                        kubectl set image deployment/order-service \
+                            order-service=${ORDER_IMAGE}:${IMAGE_TAG} \
+                            --record
 
-                                kubectl set image deployment/api-gateway \
-                                    api-gateway=${GATEWAY_IMAGE}:${IMAGE_TAG}
+                        kubectl set image deployment/api-gateway \
+                            api-gateway=${GATEWAY_IMAGE}:${IMAGE_TAG} \
+                            --record
 
-                                kubectl rollout status deployment/order-service --timeout=120s
-                                kubectl rollout status deployment/api-gateway   --timeout=120s
-                            """
-                        }
-                    } catch (e) {
-                        if (!hasKubeconfig) {
-                            echo "Deploy skipped — 'kubeconfig' credential not configured in Jenkins."
-                        } else {
-                            throw e
-                        }
-                    }
+                        # Wait until the rollout finishes before marking the build green
+                        kubectl rollout status deployment/order-service --timeout=120s
+                        kubectl rollout status deployment/api-gateway   --timeout=120s
+                    """
                 }
             }
         }
