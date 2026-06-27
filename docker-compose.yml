@@ -121,6 +121,17 @@ services:
     networks:
       - oms-network
 
+  # ─────────────────────────────────────────────
+  # Adminer — lightweight DB UI
+  # ─────────────────────────────────────────────
+  adminer:
+    image: adminer
+    container_name: oms-adminer
+    ports:
+      - "8085:8080"
+    networks:
+      - oms-network
+
 # ─────────────────────────────────────────────
 # Volumes
 # ─────────────────────────────────────────────

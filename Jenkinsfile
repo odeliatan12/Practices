@@ -171,7 +171,7 @@ pipeline {
                             export DOCKER_CONFIG=/tmp/jenkins-docker-config
                             docker pull ${ORDER_IMAGE}:${IMAGE_TAG}
                             docker pull ${GATEWAY_IMAGE}:${IMAGE_TAG}
-                            cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway
+                            cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway adminer
                             rm -rf /tmp/jenkins-docker-config
                         "
 

@@ -85,6 +85,15 @@ services:
     networks:
       - oms-network
 
+  adminer:
+    image: adminer
+    container_name: oms-adminer
+    restart: unless-stopped
+    ports:
+      - "8085:8080"
+    networks:
+      - oms-network
+
 volumes:
   postgres_data:
   redis_data:
