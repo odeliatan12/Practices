@@ -31,6 +31,9 @@ pipeline {
         // Image names
         ORDER_IMAGE    = "${REGISTRY}/order-service"
         GATEWAY_IMAGE  = "${REGISTRY}/api-gateway"
+        PAYMENT_IMAGE  = "${REGISTRY}/payment-service"
+        INVENTORY_IMAGE = "${REGISTRY}/inventory-service"
+        NOTIFICATION_IMAGE = "${REGISTRY}/notification-service"
 
         // Tag every image with the Git commit SHA — every build is traceable
         IMAGE_TAG      = "${GIT_COMMIT[0..7]}"
@@ -64,7 +67,7 @@ pipeline {
             steps {
                 // -pl shared-lib,order-service,api-gateway -am = build these modules
                 // and anything they depend on (-am = also make dependencies)
-                sh "mvn test -pl shared-lib,order-service,api-gateway -am ${MVN_FLAGS}"
+                sh "mvn test -pl shared-lib,order-service,api-gateway,payment-service,inventory-service,notification-service -am ${MVN_FLAGS}"
             }
             post {
                 // Publish JUnit test results so Jenkins shows the pass/fail graph
@@ -79,7 +82,7 @@ pipeline {
         stage('Build JARs') {
             steps {
                 // Tests already passed — skip them here to save time
-                sh "mvn package -pl shared-lib,order-service,api-gateway -am -DskipTests ${MVN_FLAGS}"
+                sh "mvn package -pl shared-lib,order-service,api-gateway,payment-service,inventory-service,notification-service -am -DskipTests ${MVN_FLAGS}"
             }
         }
 
@@ -109,6 +112,39 @@ pipeline {
                         """
                     }
                 }
+                stage('payment-service image') {
+                    steps {
+                        sh """
+                            docker build \
+                                -f payment-service/Dockerfile \
+                                -t ${PAYMENT_IMAGE}:${IMAGE_TAG} \
+                                -t ${PAYMENT_IMAGE}:latest \
+                                .
+                        """
+                    }
+                }
+                stage('inventory-service image') {
+                    steps {
+                        sh """
+                            docker build \
+                                -f inventory-service/Dockerfile \
+                                -t ${INVENTORY_IMAGE}:${IMAGE_TAG} \
+                                -t ${INVENTORY_IMAGE}:latest \
+                                .
+                        """
+                    }
+                }
+                stage('notification-service image') {
+                    steps {
+                        sh """
+                            docker build \
+                                -f notification-service/Dockerfile \
+                                -t ${NOTIFICATION_IMAGE}:${IMAGE_TAG} \
+                                -t ${NOTIFICATION_IMAGE}:latest \
+                                .
+                        """
+                    }
+                }
             }
         }
 
@@ -130,6 +166,15 @@ pipeline {
 
                         docker push ${GATEWAY_IMAGE}:${IMAGE_TAG}
                         docker push ${GATEWAY_IMAGE}:latest
+
+                        docker push ${PAYMENT_IMAGE}:${IMAGE_TAG}
+                        docker push ${PAYMENT_IMAGE}:latest
+
+                        docker push ${INVENTORY_IMAGE}:${IMAGE_TAG}
+                        docker push ${INVENTORY_IMAGE}:latest
+
+                        docker push ${NOTIFICATION_IMAGE}:${IMAGE_TAG}
+                        docker push ${NOTIFICATION_IMAGE}:latest
                     """
                 }
             }
@@ -171,7 +216,10 @@ pipeline {
                             export DOCKER_CONFIG=/tmp/jenkins-docker-config
                             docker pull ${ORDER_IMAGE}:${IMAGE_TAG}
                             docker pull ${GATEWAY_IMAGE}:${IMAGE_TAG}
-                            cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway adminer
+                            docker pull ${PAYMENT_IMAGE}:${IMAGE_TAG}
+                            docker pull ${INVENTORY_IMAGE}:${IMAGE_TAG}
+                            docker pull ${NOTIFICATION_IMAGE}:${IMAGE_TAG}
+                            cd /opt/oms && IMAGE_TAG=${IMAGE_TAG} docker compose up -d order-service api-gateway payment-service inventory-service notification-service adminer
                             rm -rf /tmp/jenkins-docker-config
                         "
 

@@ -53,4 +53,5 @@ ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
   "-XX:MaxRAMPercentage=75.0", \
   "-Djava.security.egd=file:/dev/./urandom", \
+  "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005", \
   "-jar", "app.jar"]

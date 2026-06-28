@@ -85,6 +85,70 @@ services:
     networks:
       - oms-network
 
+  payment-service:
+    image: ghcr.io/odeliatan12/oms/payment-service:${IMAGE_TAG:-latest}
+    container_name: oms-payment-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://oms-postgres:5432/payments_db
+      SPRING_DATASOURCE_USERNAME: oms
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - oms-network
+
+  inventory-service:
+    image: ghcr.io/odeliatan12/oms/inventory-service:${IMAGE_TAG:-latest}
+    container_name: oms-inventory-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://oms-postgres:5432/inventory_db
+      SPRING_DATASOURCE_USERNAME: oms
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - oms-network
+
+  notification-service:
+    image: ghcr.io/odeliatan12/oms/notification-service:${IMAGE_TAG:-latest}
+    container_name: oms-notification-service
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      kafka:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - oms-network
+
   adminer:
     image: adminer
     container_name: oms-adminer

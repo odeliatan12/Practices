@@ -122,6 +122,82 @@ services:
       - oms-network
 
   # ─────────────────────────────────────────────
+  # payment-service
+  # ─────────────────────────────────────────────
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: oms-payment-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://oms-postgres:5432/payments_db
+      SPRING_DATASOURCE_USERNAME: oms
+      SPRING_DATASOURCE_PASSWORD: oms_dev_password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - oms-network
+
+  # ─────────────────────────────────────────────
+  # inventory-service
+  # ─────────────────────────────────────────────
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    container_name: oms-inventory-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://oms-postgres:5432/inventory_db
+      SPRING_DATASOURCE_USERNAME: oms
+      SPRING_DATASOURCE_PASSWORD: oms_dev_password
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - oms-network
+
+  # ─────────────────────────────────────────────
+  # notification-service
+  # ─────────────────────────────────────────────
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: oms-notification-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: oms-kafka:9092
+      SPRING_DATA_REDIS_HOST: oms-redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - oms-network
+
+  # ─────────────────────────────────────────────
   # Adminer — lightweight DB UI
   # ─────────────────────────────────────────────
   adminer:

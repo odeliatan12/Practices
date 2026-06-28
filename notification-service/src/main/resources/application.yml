@@ -1,5 +1,5 @@
 server:
-  port: 8085
+  port: 8086
 
 spring:
   application:
@@ -8,7 +8,7 @@ spring:
   # No database — this service only consumes Kafka and sends notifications
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: oms-kafka:9092
     consumer:
       group-id: notification-service
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
